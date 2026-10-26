@@ -9,9 +9,6 @@ on:
       - master
   workflow_dispatch:
 
-env:
-  AWS_REGION: eu-north-1
-  ECR_REPOSITORY: train-ticket-reservation
 
 jobs:
   build-and-deploy:
