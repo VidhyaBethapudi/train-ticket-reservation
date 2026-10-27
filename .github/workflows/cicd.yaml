@@ -1,9 +1,86 @@
+# name: Java CI-CD Pipeline
+
+# on:
+#   push:
+#     branches:
+#       - master
+
+# permissions:
+#   contents: read
+
+# env:
+#   AWS_REGION: eu-north-1
+#   ECR_REPOSITORY: vidhya
+
+# jobs:
+#   ci-cd:
+#     runs-on: ubuntu-24.04
+
+#     steps:
+#       # 1. Checkout source code
+#       - name: Checkout Code
+#         uses: actions/checkout@v4
+
+#       # 2. Set up Java 17
+#       - name: Setup Java
+#         uses: actions/setup-java@v4
+#         with:
+#           distribution: temurin
+#           java-version: '17'
+#           cache: maven
+
+#       # 3. Build Java application
+#       - name: Build Maven
+#         run: mvn clean package -DskipTests
+
+#       # 4. Configure AWS credentials
+#       - name: Configure AWS Credentials
+#         uses: aws-actions/configure-aws-credentials@v4
+#         with:
+#           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#           aws-region: ${{ env.AWS_REGION }}
+
+#       # 5. Login to Amazon ECR
+#       - name: Login to Amazon ECR
+#         id: login-ecr
+#         uses: aws-actions/amazon-ecr-login@v2
+
+#       # 6. Build Docker image
+#       - name: Build Docker Image
+#         env:
+#           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+#           IMAGE_TAG: ${{ github.sha }}
+#         run: |
+#           docker build \
+#             -t "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
+#             -t "$REGISTRY/$ECR_REPOSITORY:latest" \
+#             .
+
+#       # 7. Scan Docker image with Trivy
+#       - name: Scan Image
+#         uses: aquasecurity/trivy-action@v0.36.0
+#         with:
+#           image-ref: ${{ steps.login-ecr.outputs.registry }}/vidhya:${{ github.sha }}
+#           format: table
+#           severity: CRITICAL,HIGH
+#           exit-code: '0'
+
+#       # 8. Push Docker image to ECR
+#       - name: Push Image to ECR
+#         env:
+#           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+#           IMAGE_TAG: ${{ github.sha }}
+#         run: |
+#           docker push "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+#           docker push "$REGISTRY/$ECR_REPOSITORY:latest"
+
 name: Java CI-CD Pipeline
 
 on:
   push:
     branches:
-      - master
+      - main
 
 permissions:
   contents: read
@@ -11,6 +88,10 @@ permissions:
 env:
   AWS_REGION: eu-north-1
   ECR_REPOSITORY: vidhya
+  ECS_CLUSTER: ecs
+  ECS_SERVICE: project_task-service-lnzg2u1o
+  ECS_TASK_DEFINITION: project_task
+  CONTAINER_NAME: vidhya
 
 jobs:
   ci-cd:
@@ -56,7 +137,7 @@ jobs:
             -t "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
             -t "$REGISTRY/$ECR_REPOSITORY:latest" \
             .
-
+      
       # 7. Scan Docker image with Trivy
       - name: Scan Image
         uses: aquasecurity/trivy-action@v0.36.0
@@ -66,6 +147,7 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: '0'
 
+      
       # 8. Push Docker image to ECR
       - name: Push Image to ECR
         env:
@@ -75,3 +157,38 @@ jobs:
           docker push "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           docker push "$REGISTRY/$ECR_REPOSITORY:latest"
 
+      # 9. Download ECS task definition
+      - name: Download ECS Task Definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "$ECS_TASK_DEFINITION" \
+            --query taskDefinition \
+            --output json |
+          jq 'del(
+            .taskDefinitionArn,
+            .revision,
+            .status,
+            .requiresAttributes,
+            .compatibilities,
+            .registeredAt,
+            .registeredBy,
+            .deregisteredAt
+          )' > task-definition.json
+
+      # 10. Update task definition with new ECR image
+      - name: Render ECS Task Definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+
+      # 11. Deploy to Amazon ECS
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
