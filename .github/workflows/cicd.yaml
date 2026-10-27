@@ -91,7 +91,7 @@ env:
   ECS_CLUSTER: ecs
   ECS_SERVICE: project_task-service-lnzg2u1o
   ECS_TASK_DEFINITION: project_task
-  CONTAINER_NAME: vidhya
+  CONTAINER_NAME: main
 
 jobs:
   ci-cd:
