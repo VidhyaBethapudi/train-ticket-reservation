@@ -1,14 +1,16 @@
-
 name: Java CI-CD Pipeline
 
 on:
   push:
     branches:
-      - master
+      - main
 
 permissions:
   contents: read
 
+env:
+  AWS_REGION: eu-north-1
+  ECR_REPOSITORY: vidhya
 
 jobs:
   ci-cd:
@@ -53,9 +55,8 @@ jobs:
           docker build \
             -t "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
             -t "$REGISTRY/$ECR_REPOSITORY:latest" \
-            
+            .
 
-      
       # 7. Scan Docker image with Trivy
       - name: Scan Image
         uses: aquasecurity/trivy-action@v0.36.0
@@ -64,7 +65,6 @@ jobs:
           format: table
           severity: CRITICAL,HIGH
           exit-code: '0'
-
 
       # 8. Push Docker image to ECR
       - name: Push Image to ECR
@@ -75,4 +75,3 @@ jobs:
           docker push "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           docker push "$REGISTRY/$ECR_REPOSITORY:latest"
 
-          
