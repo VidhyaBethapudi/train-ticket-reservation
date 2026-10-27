@@ -88,7 +88,7 @@ permissions:
 env:
   AWS_REGION: eu-north-1
   ECR_REPOSITORY: vidhya
-  ECS_CLUSTER: ecs
+  ECS_CLUSTER: project_cluster
   ECS_SERVICE: project_task-service-lnzg2u1o
   ECS_TASK_DEFINITION: project_task
   CONTAINER_NAME: Main
